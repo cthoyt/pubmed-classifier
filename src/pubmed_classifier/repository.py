@@ -1,7 +1,8 @@
-"""
+"""A repository interface for PubMed classification.
+
 1. Need a query or set of queries
 2. Need to decide what kind of featurization
-3. Need to specify a directory where data gets stored
+3. Need to specify a directory where data gets stored.
 
 Questions:
 
@@ -30,12 +31,15 @@ Tagging:
 1. define in configuration the list of allowed "tags", which are an enumeration
    for curation rules or subcategorizations
 
+Web interface:
+
+1. what metadata should get stored in repository?
 """
 
 import datetime
 
-from pydantic import BaseModel, Field
 from curies import Reference
+from pydantic import BaseModel, Field
 
 #: A mapping from the NLM Catalog ID to the journal name for journals
 #: that should be excluded
@@ -47,6 +51,8 @@ EXCLUDE_JOURNALS: dict[str, str] = {
 
 
 class Curation(BaseModel):
+    """Represents a row in the curation table."""
+
     pubmed: str
     score: float = Field(..., gt=0.0, le=1.0)
     prediction_date: datetime.date
