@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
-from typing import Unpack
 
 import numpy as np
 import pubmed_downloader
@@ -11,6 +10,7 @@ from pubmed_downloader.client import PubMedSearchKwargs
 from pystow import get_sentence_transformer
 from sentence_transformers import SentenceTransformer
 from sklearn.linear_model import LogisticRegression
+from typing_extensions import Unpack
 
 from .api import _get_text
 
