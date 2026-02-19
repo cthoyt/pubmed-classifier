@@ -6,6 +6,7 @@ from collections.abc import Sequence
 
 import numpy as np
 import pubmed_downloader
+from numpy.typing import NDArray
 from pubmed_downloader.client import PubMedSearchKwargs
 from pystow import get_sentence_transformer
 from sentence_transformers import SentenceTransformer
@@ -24,7 +25,7 @@ def predict_query(
     classifier: LogisticRegression,
     progress: bool = True,
     **search_kwargs: Unpack[PubMedSearchKwargs],
-) -> tuple[list[str], np.ndarray]:
+) -> tuple[list[str], NDArray[np.float64]]:
     """Classify results from a PubMed query."""
     pubmeds = pubmed_downloader.client.search_with_api(query, **(search_kwargs or {}))
     return predict(
@@ -41,7 +42,7 @@ def predict(
     embedder: SentenceTransformer | None = None,
     classifier: LogisticRegression,
     progress: bool = True,
-) -> tuple[list[str], np.ndarray]:
+) -> tuple[list[str], NDArray[np.float64]]:
     """Classify documents from PubMed."""
     if embedder is None:
         embedder = get_sentence_transformer()

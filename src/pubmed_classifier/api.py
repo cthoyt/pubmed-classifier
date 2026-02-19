@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterable
-from typing import Any, NamedTuple, Self, cast
+from typing import Any, NamedTuple, cast
 
 import click
 import numpy as np
@@ -19,6 +19,7 @@ from sklearn.model_selection import train_test_split
 from sklearn.svm import SVC, LinearSVC
 from sklearn.tree import DecisionTreeClassifier
 from tabulate import tabulate
+from typing_extensions import Self
 
 __all__ = [
     "Classifiers",
@@ -54,7 +55,7 @@ def _prepare(
     negatives: Iterable[str],
     *,
     embedder: SentenceTransformer | None = None,
-) -> tuple[np.ndarray, np.ndarray]:
+) -> tuple[NDArray[np.float64], NDArray[np.bool]]:
     if embedder is None:
         embedder = get_sentence_transformer()
 
