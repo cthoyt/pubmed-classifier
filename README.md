@@ -37,9 +37,20 @@ Classify documents in PubMed.
 
 ## 💪 Getting Started
 
-> TODO show in a very small amount of space the **MOST** useful thing your
-> package can do. Make it as short as possible! You have an entire set of docs
-> for later.
+By default, `pubmed-classifier` uses `pubmed-downloader` for getting the title and abstract for
+documents and `sentence-transformers` (or TF-IDF) for embedding them.
+
+```python
+from pubmed_classifier import train, predict
+
+positive_pubmeds = []
+negative_pubmeds = []
+
+classifiers = train(positive_pubmeds, negative_pubmeds)
+
+target_pubmeds = []
+_, results = predict(target_pubmeds, classifier=classifiers.logistic_regression)
+```
 
 ### Command Line Interface
 
@@ -55,7 +66,6 @@ $ pubmed_classifier --help
 
 ## 🚀 Installation
 
-<!-- Uncomment this section after your first ``tox -e finish``
 The most recent release can be installed from
 [PyPI](https://pypi.org/project/pubmed_classifier/) with uv:
 
@@ -68,7 +78,6 @@ or with pip:
 ```console
 $ python3 -m pip install pubmed_classifier
 ```
--->
 
 The most recent code and data can be installed directly from GitHub with uv:
 

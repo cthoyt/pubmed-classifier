@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterable, Sequence
-from typing import Protocol, cast
+from collections.abc import Iterable
+from typing import Any, NamedTuple, Self, cast
 
 import click
 import numpy as np
@@ -20,12 +20,33 @@ from sklearn.svm import SVC, LinearSVC
 from sklearn.tree import DecisionTreeClassifier
 from tabulate import tabulate
 
+__all__ = [
+    "Classifiers",
+    "train",
+]
 
-class Classifier(Protocol):
-    """A classifier."""
+# TODO saving / caching of models
 
-    def fit(self, x: np.ndarray, y: np.ndarray) -> None:
-        """Fit the classifier."""
+
+class Classifiers(NamedTuple):
+    """A tuple containing a variety of classifiers."""
+
+    random_forest: RandomForestClassifier
+    logistic_regression: LogisticRegression
+    decision_tree: DecisionTreeClassifier
+    linear_svc: LinearSVC
+    rbf_svc: SVC
+
+    @classmethod
+    def make(cls) -> Self:
+        """Construct an ensemble of classifiers."""
+        return cls(
+            random_forest=RandomForestClassifier(),
+            logistic_regression=LogisticRegression(),
+            decision_tree=DecisionTreeClassifier(),
+            linear_svc=LinearSVC(),
+            rbf_svc=SVC(kernel="rbf", probability=True),
+        )
 
 
 def _prepare(
@@ -33,7 +54,7 @@ def _prepare(
     negatives: Iterable[str],
     *,
     embedder: SentenceTransformer | None = None,
-):
+) -> tuple[np.ndarray, np.ndarray]:
     if embedder is None:
         embedder = get_sentence_transformer()
 
@@ -50,7 +71,7 @@ def train(
     negatives: Iterable[str],
     *,
     embedder: SentenceTransformer | None = None,
-) -> Classifier:
+) -> Classifiers:
     """Train a PubMed classifier based on positive and negative identifier sets."""
     x, y = _prepare(positives, negatives, embedder=embedder)
 
@@ -58,16 +79,9 @@ def train(
         x, y, test_size=0.33, random_state=42, shuffle=True
     )
 
-    classifiers = [
-        ("rf", RandomForestClassifier()),
-        ("lr", LogisticRegression()),
-        ("dt", DecisionTreeClassifier()),
-        ("svc", LinearSVC()),
-        ("svm", SVC(kernel="rbf", probability=True)),
-    ]
-
+    classifiers = Classifiers.make()
     results = []
-    for key, classifier in classifiers:
+    for key, classifier in zip(Classifiers._fields, classifiers, strict=False):
         classifier.fit(x_train, y_train)
         roc_auc = roc_auc_score(y_test, _predict(classifier, x_test))
         results.append((key, classifier, roc_auc))
@@ -80,10 +94,10 @@ def train(
         )
     )
 
-    return results
+    return classifiers
 
 
-def _predict(classifier, x: NDArray[np.float64] | NDArray[np.str_]) -> NDArray[np.float64]:
+def _predict(classifier: Any, x: NDArray[np.float64] | NDArray[np.str_]) -> NDArray[np.float64]:
     if hasattr(classifier, "predict_proba"):
         return cast(NDArray[np.float64], classifier.predict_proba(x)[:, 1])
     elif hasattr(classifier, "decision_function"):
@@ -108,12 +122,12 @@ def _embed(
 
 
 def _embedddd(
-    embedder: SentenceTransformer | TfidfVectorizer, texts: Sequence[str], **kwargs
+    embedder: SentenceTransformer | TfidfVectorizer, texts: list[str], **kwargs: Any
 ) -> np.ndarray:
     if isinstance(embedder, SentenceTransformer):
-        return embedder.encode(texts, convert_to_numpy=True, **kwargs)
+        return cast(np.ndarray, embedder.encode(texts, convert_to_numpy=True, **kwargs))
     elif isinstance(embedder, TfidfVectorizer):
-        return embedder.transform(texts, **kwargs)
+        return cast(np.ndarray, embedder.transform(texts, **kwargs))
     else:
         raise TypeError(f"embedder type {type(embedder)} is not supported")
 

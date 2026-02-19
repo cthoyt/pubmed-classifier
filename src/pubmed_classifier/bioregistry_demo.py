@@ -5,7 +5,6 @@ import click
 import pandas as pd
 from bioregistry.constants import CURATED_PAPERS_PATH
 from pystow import get_sentence_transformer
-from sklearn.linear_model import LogisticRegression
 
 from pubmed_classifier.predict import predict_query
 
@@ -25,9 +24,11 @@ def _demo() -> None:
     negatives = df[df["relevant"] == 0].pubmed.map(str)
     embedder = get_sentence_transformer(device="mps")
     classifiers = train(positives, negatives, embedder=embedder)
-    classifier: LogisticRegression = classifiers[1][1]
     pubmeds, results = predict_query(
-        "database OR ontology", classifier=classifier, embedder=embedder, retmax=600
+        "database OR ontology",
+        classifier=classifiers.logistic_regression,
+        embedder=embedder,
+        retmax=600,
     )
     # TODO add title + abstract?
     df = pd.DataFrame({"pubmed": pubmeds, "results": results})
