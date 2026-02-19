@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Iterable
 from typing import Any, NamedTuple, cast
 
-import click
 import numpy as np
 import pubmed_downloader
 from numpy.typing import NDArray
@@ -18,13 +18,14 @@ from sklearn.metrics import roc_auc_score
 from sklearn.model_selection import train_test_split
 from sklearn.svm import SVC, LinearSVC
 from sklearn.tree import DecisionTreeClassifier
-from tabulate import tabulate
 from typing_extensions import Self
 
 __all__ = [
     "Classifiers",
     "train",
 ]
+
+logger = logging.getLogger(__name__)
 
 # TODO saving / caching of models
 
@@ -85,15 +86,8 @@ def train(
     for key, classifier in zip(Classifiers._fields, classifiers, strict=False):
         classifier.fit(x_train, y_train)
         roc_auc = roc_auc_score(y_test, _predict(classifier, x_test))
+        logger.info("%s ROC-AUC: %.2f", key, roc_auc)
         results.append((key, classifier, roc_auc))
-
-    click.echo(
-        tabulate(
-            [(k, roc) for k, _, roc in results],
-            headers=["classifier", "AUC-ROC"],
-            tablefmt="github",
-        )
-    )
 
     return classifiers
 
@@ -111,24 +105,22 @@ def _embed(
     pubmeds: Iterable[str],
     embedder: SentenceTransformer | TfidfVectorizer,
     positive: bool,
-) -> tuple[np.ndarray, np.ndarray]:
+) -> tuple[NDArray[np.float64], NDArray[np.bool]]:
     articles = pubmed_downloader.get_articles(pubmeds, error_strategy="skip")
     texts = [_get_text(article) for article in articles]
     embeddings = _embedddd(embedder, texts)
-    if positive:
-        rr = np.ones(embeddings.shape[0])
-    else:
-        rr = np.zeros(embeddings.shape[0])
+    b = [positive] * embeddings.shape[0]
+    rr = np.array(b, dtype=np.bool)
     return embeddings, rr
 
 
 def _embedddd(
     embedder: SentenceTransformer | TfidfVectorizer, texts: list[str], **kwargs: Any
-) -> np.ndarray:
+) -> NDArray[np.float64]:
     if isinstance(embedder, SentenceTransformer):
-        return cast(np.ndarray, embedder.encode(texts, convert_to_numpy=True, **kwargs))
+        return cast(NDArray[np.float64], embedder.encode(texts, convert_to_numpy=True, **kwargs))
     elif isinstance(embedder, TfidfVectorizer):
-        return cast(np.ndarray, embedder.transform(texts, **kwargs))
+        return cast(NDArray[np.float64], embedder.transform(texts, **kwargs))
     else:
         raise TypeError(f"embedder type {type(embedder)} is not supported")
 

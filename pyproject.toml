@@ -52,7 +52,7 @@ requires-python = ">=3.10"
 dependencies = [
     "numpy",
     "scikit-learn",
-    "pubmed-downloader",
+    "pubmed-downloader>=0.0.13",
     "typing-extensions",
     "sentence_transformers",
     "pystow>=0.7.27",

@@ -6,9 +6,8 @@ import pandas as pd
 from bioregistry.constants import CURATED_PAPERS_PATH
 from pystow import get_sentence_transformer
 
+from pubmed_classifier.api import train
 from pubmed_classifier.predict import predict_query
-
-from .api import train
 
 
 def _demo() -> None:
@@ -24,15 +23,21 @@ def _demo() -> None:
     negatives = df[df["relevant"] == 0].pubmed.map(str)
     embedder = get_sentence_transformer(device="mps")
     classifiers = train(positives, negatives, embedder=embedder)
-    pubmeds, results = predict_query(
+    articles, results = predict_query(
         "database OR ontology",
         classifier=classifiers.logistic_regression,
         embedder=embedder,
         retmax=600,
+        full=True,
     )
-    # TODO add title + abstract?
-    df = pd.DataFrame({"pubmed": pubmeds, "results": results})
-    click.echo(df.to_markdown())
+    rows = []
+    for article, result in zip(articles, results, strict=False):
+        if article.is_review() or article.is_retracted():
+            continue
+        rows.append((article.pubmed, result, article.title))
+    df = pd.DataFrame(rows, columns=["pubmed", "result", "title"])
+    df.sort_values("result", ascending=False, inplace=True)
+    click.echo(df.to_markdown(index=False))
 
 
 if __name__ == "__main__":
