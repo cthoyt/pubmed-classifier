@@ -1,0 +1,31 @@
+{
+  "template": "https://github.com/cthoyt/cookiecutter-snekpack",
+  "commit": "7f7d141397eae4f598776a3f3881ccb88bbed41a",
+  "checkout": null,
+  "context": {
+    "cookiecutter": {
+      "package_name": "pubmed_classifier",
+      "package_name_stylized": "PubMed Classifier",
+      "short_description": "Classify documents in PubMed",
+      "author_name": "Charles Tapley Hoyt",
+      "author_github": "cthoyt",
+      "author_email": "cthoyt@gmail.com",
+      "github_organization_name": "cthoyt",
+      "github_repository_name": "pubmed-classifier",
+      "command_line_interface": true,
+      "gitlab": false,
+      "runner": "tox",
+      "__not_charlie": "",
+      "__runner": "tox -e",
+      "__runner_uv": "--with tox-uv tox -e",
+      "__runner_pip": "tox tox-uv",
+      "__runner_install_uv": "uv tool install tox --with tox-uv",
+      "__runner_install_pip": "python3 -m pip install tox tox-uv",
+      "__runner_tests": "py",
+      "__gh_slug": "cthoyt/pubmed-classifier",
+      "_template": "https://github.com/cthoyt/cookiecutter-snekpack",
+      "_commit": "7f7d141397eae4f598776a3f3881ccb88bbed41a"
+    }
+  },
+  "directory": null
+}
