@@ -1,6 +1,6 @@
 {
   "template": "https://github.com/cthoyt/cookiecutter-snekpack",
-  "commit": "7f7d141397eae4f598776a3f3881ccb88bbed41a",
+  "commit": "ed66066a80f906e59653f7dd03f32cab519f0d4a",
   "checkout": null,
   "context": {
     "cookiecutter": {
@@ -15,6 +15,7 @@
       "command_line_interface": true,
       "gitlab": false,
       "runner": "tox",
+      "citation_file": false,
       "__not_charlie": "",
       "__runner": "tox -e",
       "__runner_uv": "--with tox-uv tox -e",
@@ -23,8 +24,9 @@
       "__runner_install_pip": "python3 -m pip install tox tox-uv",
       "__runner_tests": "py",
       "__gh_slug": "cthoyt/pubmed-classifier",
+      "__package_name_dashed": "pubmed-classifier",
       "_template": "https://github.com/cthoyt/cookiecutter-snekpack",
-      "_commit": "7f7d141397eae4f598776a3f3881ccb88bbed41a"
+      "_commit": "ed66066a80f906e59653f7dd03f32cab519f0d4a"
     }
   },
   "directory": null
