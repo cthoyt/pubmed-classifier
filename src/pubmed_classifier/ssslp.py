@@ -26,6 +26,7 @@ class BinaryCategory(BaseModel):
 
     type: Literal["binary"] = "binary"
     key: str
+    reference: NamableReference | None = None
 
 
 DEFAULT_CATEGORY = "call"
@@ -62,7 +63,7 @@ def read(path: str | Path, conf: Conf) -> list[Record]:
     return list(_read_iter(path, conf))
 
 
-def _parse_bool(x: str) -> bool | None:
+def _parse_bool(x: str | None) -> bool | None:
     if not x:
         return None
     if x.lower() in {"yes", "true", "on", "1"}:
@@ -87,17 +88,24 @@ def _read_iter(path: str | Path, conf: Conf) -> Iterable[Record]:
                 logger.warning("[%d] no document ID found", i)
                 continue
 
-            calls = {
-                category.key: Call(
-                    value=_parse_bool(value),
+            calls = {}
+            for category in conf.categories:
+                if category.key not in record:
+                    continue
+
+                raw_value = record.get(category.key)
+
+                # if extending to have categories that
+                # are non-binary, then this would change
+                value = _parse_bool(raw_value)
+
+                calls[category.key] = Call(
+                    value=value,
                     curator=NamableReference.from_curie(curator_curie)
                     if (curator_curie := record.get("curator"))
                     else None,
                     date=record.get("date"),
                 )
-                for category in conf.categories
-                if (value := record.get(category.key))
-            }
             if not calls:
                 logger.warning("[%d] no calls found", i)
                 continue
