@@ -9,14 +9,15 @@ from typing import Literal
 
 import click
 import numpy as np
-from curies import NamableReference
+import pystow
+from curies import NamableReference, Prefix
 from numpy.typing import NDArray
 from pydantic import BaseModel, Field
 from pystow.utils import safe_open_dict_reader
 from sentence_transformers import SentenceTransformer
 from tabulate import tabulate
 
-from pubmed_classifier.api import Classifiers, Results, _embed, _train_helper
+from pubmed_classifier.api import Classifiers, Results, _embed, _predict, _train_helper
 
 logger = logging.getLogger(__name__)
 
@@ -81,9 +82,9 @@ def _read_iter(path: str | Path, conf: Conf) -> Iterable[Record]:
             if document_curie := record.get("document"):
                 document = NamableReference.from_curie(document_curie, name=title)
             elif doi := record.get("doi"):
-                document = NamableReference(prefix="doi", identifier=doi, name=title)
+                document = NamableReference(prefix=Prefix("doi"), identifier=doi, name=title)
             elif pubmed := record.get("pubmed"):
-                document = NamableReference(prefix="pubmed", identifier=pubmed, name=title)
+                document = NamableReference(prefix=Prefix("pubmed"), identifier=pubmed, name=title)
             else:
                 logger.warning("[%d] no document ID found", i)
                 continue
@@ -209,10 +210,22 @@ def _demo() -> None:
     )
     records = read("/Users/cthoyt/dev/catalaix/app/sources/citavi/papers.tsv", conf)
     click.echo(summarize(records, conf))
-    _classifiers, results = train(records, category="PEF depolymerization")
+    embedder = pystow.get_sentence_transformer()
+    _classifiers, results = train(records, category="PEF depolymerization", embedder=embedder)
     click.echo(
         tabulate([(n, v) for n, _, v in results], headers=["model", "ROC-AUC"], tablefmt="github")
     )
+
+    import pandas as pd
+
+    df = pd.read_csv(
+        "/Users/cthoyt/dev/catalaix/app/prioritization/collated.tsv", sep="\t", dtype=str
+    )
+
+    vecs = embedder.encode(df["title"], convert_to_numpy=True)
+    df["PEF depolymerization"] = _predict(_classifiers.logistic_regression, vecs)
+    df = df.sort_values("PEF depolymerization", ascending=False)
+    df.to_csv("pef-depolymerization.tsv", index=False, sep="\t")
 
 
 if __name__ == "__main__":
