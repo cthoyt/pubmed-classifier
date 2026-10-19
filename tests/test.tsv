@@ -1,0 +1,7 @@
+---
+title: hello
+categories:
+- id: new_prefix
+----
+document	call	curator	date	category
+pubmed:30380085	true	orcid:0009-0009-3402-8013	2025-10-07	new_prefix
