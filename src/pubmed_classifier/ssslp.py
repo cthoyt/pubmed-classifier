@@ -16,7 +16,7 @@ from pystow.utils import safe_open_dict_reader
 from sentence_transformers import SentenceTransformer
 from tabulate import tabulate
 
-from pubmed_classifier.api import Classifiers, _embed, _train_helper
+from pubmed_classifier.api import Classifiers, Results, _embed, _train_helper
 
 logger = logging.getLogger(__name__)
 
@@ -146,6 +146,8 @@ def _prepare(
         embedder = pystow.get_sentence_transformer()
 
     positives, negatives = _stratify(records, category=category)
+    if not positives or not negatives:
+        raise ValueError("missing one of positives/negatives. check that category is set properly")
 
     positive_embeddings, positive_indicator = _embed(positives, embedder, True)
     negative_embeddings, negative_indicator = _embed(negatives, embedder, False)
@@ -160,7 +162,7 @@ def train(
     *,
     category: str | None = None,
     embedder: SentenceTransformer | None = None,
-) -> Classifiers:
+) -> tuple[Classifiers, Results]:
     """Train a PubMed classifier based on positive and negative identifier sets."""
     x, y = _prepare(records, category=category, embedder=embedder)
     return _train_helper(x, y)
@@ -199,7 +201,10 @@ def _demo() -> None:
     )
     records = read("/Users/cthoyt/dev/catalaix/app/sources/citavi/papers.tsv", conf)
     click.echo(summarize(records, conf))
-    train(records)
+    _classifiers, results = train(records, category="PEF depolymerization")
+    click.echo(
+        tabulate([(n, v) for n, _, v in results], headers=["model", "ROC-AUC"], tablefmt="github")
+    )
 
 
 if __name__ == "__main__":

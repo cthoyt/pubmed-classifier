@@ -4,20 +4,20 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Iterable
-from typing import Any, NamedTuple, cast
+from typing import Any, NamedTuple, TypeAlias, cast
 
 import numpy as np
 import pubmed_downloader
 from numpy.typing import NDArray
 from pystow import get_sentence_transformer
 from sentence_transformers import SentenceTransformer
+from sklearn.calibration import CalibratedClassifierCV
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import roc_auc_score
 from sklearn.model_selection import train_test_split
 from sklearn.svm import SVC, LinearSVC
-from sklearn.tree import DecisionTreeClassifier
 from typing_extensions import Self
 
 __all__ = [
@@ -35,9 +35,9 @@ class Classifiers(NamedTuple):
 
     random_forest: RandomForestClassifier
     logistic_regression: LogisticRegression
-    decision_tree: DecisionTreeClassifier
     linear_svc: LinearSVC
     rbf_svc: SVC
+    # decision tree not great here
 
     @classmethod
     def make(cls) -> Self:
@@ -45,9 +45,8 @@ class Classifiers(NamedTuple):
         return cls(
             random_forest=RandomForestClassifier(),
             logistic_regression=LogisticRegression(),
-            decision_tree=DecisionTreeClassifier(),
             linear_svc=LinearSVC(),
-            rbf_svc=SVC(kernel="rbf", probability=True),
+            rbf_svc=CalibratedClassifierCV(SVC(kernel="rbf"), ensemble=False),
         )
 
 
@@ -68,12 +67,15 @@ def _prepare(
     return x, y
 
 
+Results: TypeAlias = list[tuple[str, Any, float]]
+
+
 def train(
     positive_pubmed_ids: Iterable[str],
     negative_pubmed_ids: Iterable[str],
     *,
     embedder: SentenceTransformer | None = None,
-) -> Classifiers:
+) -> tuple[Classifiers, Results]:
     """Train a PubMed classifier based on positive and negative identifier sets."""
     x, y = _prepare(positive_pubmed_ids, negative_pubmed_ids, embedder=embedder)
     return _train_helper(x, y)
@@ -81,20 +83,20 @@ def train(
 
 def _train_helper(
     x: NDArray[np.float64], y: NDArray[np.bool], test_size: float = 0.33, random_state: int = 42
-) -> Classifiers:
+) -> tuple[Classifiers, Results]:
     x_train, x_test, y_train, y_test = train_test_split(
         x, y, test_size=test_size, random_state=random_state, shuffle=True
     )
 
     classifiers = Classifiers.make()
-    results = []
+    results: Results = []
     for key, classifier in zip(Classifiers._fields, classifiers, strict=False):
         classifier.fit(x_train, y_train)
         roc_auc = roc_auc_score(y_test, _predict(classifier, x_test))
         logger.info("%s ROC-AUC: %.2f", key, roc_auc)
         results.append((key, classifier, roc_auc))
 
-    return classifiers
+    return classifiers, results
 
 
 def _predict(classifier: Any, x: NDArray[np.float64] | NDArray[np.str_]) -> NDArray[np.float64]:

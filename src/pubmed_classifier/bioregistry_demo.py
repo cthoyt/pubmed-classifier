@@ -22,7 +22,7 @@ def _demo() -> None:
     positives.update(df[df["relevant"] == 1].pubmed.map(str))
     negatives = df[df["relevant"] == 0].pubmed.map(str)
     embedder = get_sentence_transformer(device="mps")
-    classifiers = train(positives, negatives, embedder=embedder)
+    classifiers, _evaluation = train(positives, negatives, embedder=embedder)
     articles, results = predict_query(
         "database OR ontology",
         classifier=classifiers.logistic_regression,
