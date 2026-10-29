@@ -11,13 +11,13 @@ from tabulate import tabulate
 
 from pubmed_classifier.api import Classifiers, Results, _embed, _predict, _train_helper
 from pubmed_classifier.sssea.api import (
-    BinaryCategory,
+    BinaryAnnotationMetadata,
     Featurizer,
     Metadata,
     Record,
     _featurize_abstract,
-    _stratify,
     read,
+    stratify_featurize_binary,
     summarize,
 )
 
@@ -56,7 +56,9 @@ def prepare(
 
         embedder = pystow.get_sentence_transformer()
 
-    positives, negatives = _stratify(records, category=category, featurizer=featurizer)
+    positives, negatives = stratify_featurize_binary(
+        records, category=category, featurizer=featurizer
+    )
     if not positives or not negatives:
         raise ValueError("missing one of positives/negatives. check that category is set properly")
 
@@ -76,14 +78,14 @@ def _demo() -> None:
         title="test",
         description="test",
         categories=[
-            BinaryCategory(key="enzyme paper"),
-            BinaryCategory(key="PET depolymerization"),
-            BinaryCategory(key="PEF depolymerization"),
-            BinaryCategory(key="PEF polymerization"),
-            BinaryCategory(key="PET polymerization"),
+            BinaryAnnotationMetadata(key="enzyme paper"),
+            BinaryAnnotationMetadata(key="PET depolymerization"),
+            BinaryAnnotationMetadata(key="PEF depolymerization"),
+            BinaryAnnotationMetadata(key="PEF polymerization"),
+            BinaryAnnotationMetadata(key="PET polymerization"),
         ],
     )
-    records = read("/Users/cthoyt/dev/catalaix/app/sources/citavi/papers.tsv", conf)
+    records = read("/Users/cthoyt/dev/catalaix/app/sources/citavi/papers.tsv", metadata=conf)
     click.echo(summarize(records, conf))
     embedder = pystow.get_sentence_transformer()
     _classifiers, results = train(

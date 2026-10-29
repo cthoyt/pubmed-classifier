@@ -14,12 +14,14 @@ from tabulate import tabulate
 __all__ = [
     "DEFAULT_ANNOTATION_KEY",
     "BinaryAnnotation",
-    "BinaryCategory",
+    "BinaryAnnotationMetadata",
     "CategoricalAnnotation",
+    "CategoricalAnnotationMetadata",
     "Featurizer",
     "Metadata",
     "Record",
     "read",
+    "stratify_featurize_binary",
 ]
 
 logger = logging.getLogger(__name__)
@@ -34,32 +36,33 @@ Features: TypeAlias = dict[str, Any]
 Featurizer: TypeAlias = Callable[[NamableReference, Features], str | None]
 
 
-class _BaseCategory(BaseModel):
+class _AnnotationMetadata(BaseModel):
     type: BinaryOrCategorical
     key: str
     reference: NamableReference | None = None
+    nullable: bool = True
 
 
-class BinaryCategory(_BaseCategory):
+class BinaryAnnotationMetadata(_AnnotationMetadata):
     """Information about how a given category should be parsed."""
 
     type: Literal["binary"] = "binary"
 
 
-class CategoricalCategory(_BaseCategory):
+class CategoricalAnnotationMetadata(_AnnotationMetadata):
     """Information about how a given category should be parsed."""
 
     type: Literal["categorical"] = "categorical"
     allowed: list[str] | None = None
 
 
-Category = BinaryCategory | CategoricalCategory
+AnnotationMetadata = BinaryAnnotationMetadata | CategoricalAnnotationMetadata
 
 DEFAULT_ANNOTATION_KEY = "call"
 
 
-def _default_category() -> list[Category]:
-    return [BinaryCategory(key=DEFAULT_ANNOTATION_KEY)]
+def _default_category() -> list[AnnotationMetadata]:
+    return [BinaryAnnotationMetadata(key=DEFAULT_ANNOTATION_KEY, nullable=False)]
 
 
 class Metadata(BaseModel):
@@ -69,7 +72,7 @@ class Metadata(BaseModel):
     description: str | None = None
     license: NamableReference | None = None
     creators: list[NamableReference] | None = None
-    categories: list[Category] = Field(default_factory=_default_category)
+    categories: list[AnnotationMetadata] = Field(default_factory=_default_category)
 
 
 class _BaseCall(BaseModel, Generic[X]):
@@ -105,9 +108,9 @@ class Record(BaseModel):
     features: Features
 
 
-def read(path: Source, metadata: Metadata | None = None) -> list[Record]:
+def read(path: Source, *, metadata: Metadata | None = None) -> list[Record]:
     """Read a SSSLP TSV file."""
-    return list(_read_iter(path, metadata))
+    return list(_read_iter(path, metadata=metadata))
 
 
 def _parse_bool(x: str) -> bool:
@@ -122,7 +125,7 @@ DOI = Prefix("doi")
 PUBMED = Prefix("pubmed")
 
 
-def _read_iter(path: Source, metadata: Metadata | None = None) -> Iterable[Record]:  # noqa:C901
+def _read_iter(path: Source, *, metadata: Metadata | None = None) -> Iterable[Record]:  # noqa:C901
     if metadata is None:
         metadata = Metadata()
     with safe_open_dict_reader(path) as reader:
@@ -144,11 +147,12 @@ def _read_iter(path: Source, metadata: Metadata | None = None) -> Iterable[Recor
 
             calls: dict[str, Annotation] = {}
             for category in metadata.categories:
-                if category.key not in record:
-                    continue
-                raw_value = record.get(category.key)
-                if raw_value is None:
-                    continue
+                value = record.get(category.key)
+                if value is None:
+                    if category.nullable:
+                        continue
+                    else:
+                        raise ValueError(f"required to have category: {category.key}")
 
                 curator = (
                     NamableReference.from_curie(curator_curie)
@@ -157,15 +161,15 @@ def _read_iter(path: Source, metadata: Metadata | None = None) -> Iterable[Recor
                 )
 
                 match category:
-                    case BinaryCategory():
+                    case BinaryAnnotationMetadata():
                         calls[category.key] = BinaryAnnotation(
-                            value=_parse_bool(raw_value), curator=curator, date=record.get("date")
+                            value=_parse_bool(value), curator=curator, date=record.get("date")
                         )
                     case CategoricalAnnotation():
-                        if category.allowed and raw_value not in category.allowed:
+                        if category.allowed and value not in category.allowed:
                             raise ValueError
                         calls[category.key] = CategoricalAnnotation(
-                            value=raw_value, curator=curator, date=record.get("date")
+                            value=value, curator=curator, date=record.get("date")
                         )
 
             if not calls:
@@ -183,12 +187,13 @@ def _featurize_abstract(reference: NamableReference, features: Features) -> str 
     return text
 
 
-def _stratify(
+def stratify_featurize_binary(
     records: Iterable[Record],
     *,
     featurizer: Featurizer,
     category: str | None = None,
 ) -> tuple[Sequence[str], Sequence[str]]:
+    """Stratify records based on a binary category."""
     positive = []
     negative = []
     if category is None:
@@ -210,6 +215,10 @@ def _stratify(
                 else:
                     negative.append(text)
             case CategoricalAnnotation():
+                # this could be implemented by passing
+                # a specific one of the tags to consider
+                # as either positive or negative, then
+                # considering it as a one-vs-all scenario
                 raise NotImplementedError
 
     return positive, negative
