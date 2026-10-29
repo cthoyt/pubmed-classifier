@@ -102,7 +102,8 @@ def _demo() -> None:
         records, category="PEF depolymerization", embedder=embedder, featurizer=_featurize_abstract
     )
     click.echo(
-        tabulate([(n, v) for n, _, v in results], headers=["model", "ROC-AUC"], tablefmt="github")
+        "\n"
+        + tabulate([(n, v) for n, _, v in results], headers=["model", "ROC-AUC"], tablefmt="github")
     )
 
     import pandas as pd
@@ -114,6 +115,7 @@ def _demo() -> None:
     vecs = embedder.encode(df["title"], convert_to_numpy=True)
     df["PEF depolymerization"] = _predict(_classifiers.logistic_regression, vecs)
     df = df.sort_values("PEF depolymerization", ascending=False)
+    click.echo("\n" + df.head(20).to_markdown(index=False))
     df.to_csv("pef-depolymerization.tsv", index=False, sep="\t")
 
 
