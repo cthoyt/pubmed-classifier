@@ -10,7 +10,16 @@ from sentence_transformers import SentenceTransformer
 from tabulate import tabulate
 
 from pubmed_classifier.api import Classifiers, Results, _embed, _predict, _train_helper
-from pubmed_classifier.sssea.api import BinaryCategory, Conf, Record, _stratify, read, summarize
+from pubmed_classifier.sssea.api import (
+    BinaryCategory,
+    Featurizer,
+    Metadata,
+    Record,
+    _featurize_abstract,
+    _stratify,
+    read,
+    summarize,
+)
 
 __all__ = ["prepare", "train"]
 
@@ -18,11 +27,12 @@ __all__ = ["prepare", "train"]
 def train(
     records: Iterable[Record],
     *,
+    featurizer: Featurizer,
     category: str | None = None,
     embedder: SentenceTransformer | None = None,
 ) -> tuple[Classifiers, Results]:
     """Train a PubMed classifier based on positive and negative identifier sets."""
-    x, y = prepare(records, category=category, embedder=embedder)
+    x, y = prepare(records, category=category, embedder=embedder, featurizer=featurizer)
     return _train_helper(x, y)
 
 
@@ -36,6 +46,7 @@ class PreparedData(NamedTuple):
 def prepare(
     records: Iterable[Record],
     *,
+    featurizer: Featurizer,
     category: str | None = None,
     embedder: SentenceTransformer | None = None,
 ) -> tuple[NDArray[np.float64], NDArray[np.bool]]:
@@ -45,7 +56,7 @@ def prepare(
 
         embedder = pystow.get_sentence_transformer()
 
-    positives, negatives = _stratify(records, category=category)
+    positives, negatives = _stratify(records, category=category, featurizer=featurizer)
     if not positives or not negatives:
         raise ValueError("missing one of positives/negatives. check that category is set properly")
 
@@ -61,7 +72,7 @@ def prepare(
 def _demo() -> None:
     import pystow
 
-    conf = Conf(
+    conf = Metadata(
         title="test",
         description="test",
         categories=[
@@ -75,7 +86,9 @@ def _demo() -> None:
     records = read("/Users/cthoyt/dev/catalaix/app/sources/citavi/papers.tsv", conf)
     click.echo(summarize(records, conf))
     embedder = pystow.get_sentence_transformer()
-    _classifiers, results = train(records, category="PEF depolymerization", embedder=embedder)
+    _classifiers, results = train(
+        records, category="PEF depolymerization", embedder=embedder, featurizer=_featurize_abstract
+    )
     click.echo(
         tabulate([(n, v) for n, _, v in results], headers=["model", "ROC-AUC"], tablefmt="github")
     )

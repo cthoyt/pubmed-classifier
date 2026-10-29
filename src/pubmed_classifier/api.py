@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Iterable
-from typing import Any, NamedTuple, TypeAlias, cast
+from typing import Any, NamedTuple, Self, TypeAlias, cast
 
 import numpy as np
 import pubmed_downloader
@@ -18,7 +18,6 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import roc_auc_score
 from sklearn.model_selection import train_test_split
 from sklearn.svm import SVC, LinearSVC
-from typing_extensions import Self
 
 __all__ = [
     "Classifiers",

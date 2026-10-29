@@ -3,61 +3,114 @@
 import datetime
 import logging
 from collections import Counter, defaultdict
-from collections.abc import Iterable, Sequence
-from pathlib import Path
+from collections.abc import Callable, Iterable, Sequence
+from typing import Any, Generic, Literal, TypeAlias, TypeVar
 
 from curies import NamableReference, Prefix
 from pydantic import BaseModel, Field
-from pystow.utils import safe_open_dict_reader
+from pystow.utils import Source, safe_open_dict_reader
 from tabulate import tabulate
+
+__all__ = [
+    "DEFAULT_ANNOTATION_KEY",
+    "BinaryAnnotation",
+    "BinaryCategory",
+    "CategoricalAnnotation",
+    "Featurizer",
+    "Metadata",
+    "Record",
+    "read",
+]
 
 logger = logging.getLogger(__name__)
 
+X = TypeVar("X")
 
-class BinaryCategory(BaseModel):
-    """Information about how a given category should be parsed."""
+BinaryOrCategorical: TypeAlias = Literal["binary", "categorical"]
 
+Features: TypeAlias = dict[str, Any]
+
+#: A function that consumes a features dictionary and produces a feature string
+Featurizer: TypeAlias = Callable[[NamableReference, Features], str | None]
+
+
+class _BaseCategory(BaseModel):
+    type: BinaryOrCategorical
     key: str
     reference: NamableReference | None = None
 
 
-DEFAULT_CATEGORY = "call"
+class BinaryCategory(_BaseCategory):
+    """Information about how a given category should be parsed."""
+
+    type: Literal["binary"] = "binary"
 
 
-class Conf(BaseModel):
+class CategoricalCategory(_BaseCategory):
+    """Information about how a given category should be parsed."""
+
+    type: Literal["categorical"] = "categorical"
+    allowed: list[str] | None = None
+
+
+Category = BinaryCategory | CategoricalCategory
+
+DEFAULT_ANNOTATION_KEY = "call"
+
+
+def _default_category() -> list[Category]:
+    return [BinaryCategory(key=DEFAULT_ANNOTATION_KEY)]
+
+
+class Metadata(BaseModel):
     """Configuration for parsing a literature prioritization TSV document."""
 
-    title: str
+    title: str | None = None
     description: str | None = None
-    categories: list[BinaryCategory] = Field(
-        default_factory=lambda: [BinaryCategory(key=DEFAULT_CATEGORY)]
-    )
+    license: NamableReference | None = None
+    creators: list[NamableReference] | None = None
+    categories: list[Category] = Field(default_factory=_default_category)
 
 
-class BinaryCall(BaseModel):
-    """A true/false judgment for a given document."""
-
-    value: bool
+class _BaseCall(BaseModel, Generic[X]):
+    type: BinaryOrCategorical
+    value: X
     curator: NamableReference | None = None
     date: datetime.date | None = None
+
+
+class BinaryAnnotation(_BaseCall[bool]):
+    """A binary judgment."""
+
+    type: Literal["binary"] = "binary"
+    value: bool
+
+
+class CategoricalAnnotation(_BaseCall[str]):
+    """A categorical judgment."""
+
+    type: Literal["categorical"] = "categorical"
+    value: str
+
+
+#: An annotation, either binary or categorical
+Annotation = BinaryAnnotation | CategoricalAnnotation
 
 
 class Record(BaseModel):
     """A single curation record."""
 
-    document: NamableReference
-    calls: dict[str, BinaryCall]
-    abstract: str | None = None
+    reference: NamableReference
+    annotations: dict[str, Annotation]
+    features: Features
 
 
-def read(path: str | Path, conf: Conf) -> list[Record]:
+def read(path: Source, metadata: Metadata | None = None) -> list[Record]:
     """Read a SSSLP TSV file."""
-    return list(_read_iter(path, conf))
+    return list(_read_iter(path, metadata))
 
 
-def _parse_bool(x: str | None) -> bool | None:
-    if not x:
-        return None
+def _parse_bool(x: str) -> bool:
     if x.lower() in {"yes", "true", "on", "1"}:
         return True
     elif x.lower() in {"no", "false", "off", "0"}:
@@ -65,83 +118,109 @@ def _parse_bool(x: str | None) -> bool | None:
     raise ValueError(f"Invalid boolean value: {x}")
 
 
-def _read_iter(path: str | Path, conf: Conf) -> Iterable[Record]:
+DOI = Prefix("doi")
+PUBMED = Prefix("pubmed")
+
+
+def _read_iter(path: Source, metadata: Metadata | None = None) -> Iterable[Record]:  # noqa:C901
+    if metadata is None:
+        metadata = Metadata()
     with safe_open_dict_reader(path) as reader:
-        # TODO check that the reader's headers include the calls
+        # If name and title in reader columns, raise
+        # TODO check that the reader's headers include the defined calls and features
         for i, record in enumerate(reader, start=2):
-            title = record.get("title")
-            if document_curie := record.get("document"):
-                document = NamableReference.from_curie(document_curie, name=title)
+            name = record.get("name") or record.get("title")
+            if entity_curie := record.get("entity"):
+                reference = NamableReference.from_curie(entity_curie, name=name)
             elif doi := record.get("doi"):
-                document = NamableReference(prefix=Prefix("doi"), identifier=doi, name=title)
-            elif pubmed := record.get("pubmed"):
-                document = NamableReference(prefix=Prefix("pubmed"), identifier=pubmed, name=title)
+                reference = NamableReference(prefix=DOI, identifier=doi, name=name)
+            elif pubmed_id := record.get("pubmed"):
+                reference = NamableReference(prefix=PUBMED, identifier=pubmed_id, name=name)
             else:
-                logger.warning("[%d] no document ID found", i)
+                logger.warning("[%d] no entity found", i)
                 continue
 
-            calls = {}
-            for category in conf.categories:
+            features: dict[str, Any] = {}
+
+            calls: dict[str, Annotation] = {}
+            for category in metadata.categories:
                 if category.key not in record:
                     continue
-
                 raw_value = record.get(category.key)
-
-                # if extending to have categories that
-                # are non-binary, then this would change
-                value = _parse_bool(raw_value)
-                if value is None:
+                if raw_value is None:
                     continue
 
-                calls[category.key] = BinaryCall(
-                    value=value,
-                    curator=NamableReference.from_curie(curator_curie)
+                curator = (
+                    NamableReference.from_curie(curator_curie)
                     if (curator_curie := record.get("curator"))
-                    else None,
-                    date=record.get("date"),
+                    else None
                 )
+
+                match category:
+                    case BinaryCategory():
+                        calls[category.key] = BinaryAnnotation(
+                            value=_parse_bool(raw_value), curator=curator, date=record.get("date")
+                        )
+                    case CategoricalAnnotation():
+                        if category.allowed and raw_value not in category.allowed:
+                            raise ValueError
+                        calls[category.key] = CategoricalAnnotation(
+                            value=raw_value, curator=curator, date=record.get("date")
+                        )
+
             if not calls:
                 logger.warning("[%d] no calls found", i)
                 continue
 
-            rr = {
-                "document": document,
-                "abstract": record.get("abstract"),
-                "calls": calls,
-            }
-            yield Record.model_validate(rr)
+            yield Record(reference=reference, annotations=calls, features=features)
+
+
+def _featurize_abstract(reference: NamableReference, features: Features) -> str | None:
+    abstract = features.get("abstract")
+    if reference.name is None and abstract is None:
+        return None
+    text = " ".join(x for x in (reference.name, abstract) if x is not None)
+    return text
 
 
 def _stratify(
     records: Iterable[Record],
     *,
+    featurizer: Featurizer,
     category: str | None = None,
 ) -> tuple[Sequence[str], Sequence[str]]:
     positive = []
     negative = []
     if category is None:
-        category = DEFAULT_CATEGORY
+        category = DEFAULT_ANNOTATION_KEY
     for record in records:
-        if record.document.name is None and record.abstract is None:
+        if record.reference.name is None:
             continue
-        text = " ".join(x for x in (record.document.name, record.abstract) if x is not None)
-        if call := record.calls.get(category):
-            if call.value is None:
-                pass
-            elif call.value:
-                positive.append(text)
-            else:
-                negative.append(text)
+
+        text = featurizer(record.reference, record.features)
+        if text is None:
+            continue
+
+        match record.annotations.get(category):
+            case None:
+                continue
+            case BinaryAnnotation() as annotation:
+                if annotation.value:
+                    positive.append(text)
+                else:
+                    negative.append(text)
+            case CategoricalAnnotation():
+                raise NotImplementedError
 
     return positive, negative
 
 
-def summarize(records: Iterable[Record], conf: Conf) -> str:
+def summarize(records: Iterable[Record], conf: Metadata) -> str:
     """Summarize a PubMed classifier."""
-    dd: defaultdict[str, Counter[bool | None]] = defaultdict(Counter)
+    dd: defaultdict[str, Counter[str | bool | None]] = defaultdict(Counter)
     for record in records:
         for category in conf.categories:
-            if call := record.calls.get(category.key):
+            if call := record.annotations.get(category.key):
                 dd[category.key][call.value] += 1
             else:
                 dd[category.key][None] += 1
