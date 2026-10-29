@@ -5,6 +5,7 @@ from typing import NamedTuple
 
 import click
 import numpy as np
+from curies import NamableReference
 from numpy._typing import NDArray
 from sentence_transformers import SentenceTransformer
 from tabulate import tabulate
@@ -12,10 +13,10 @@ from tabulate import tabulate
 from pubmed_classifier.api import Classifiers, Results, _embed, _predict, _train_helper
 from pubmed_classifier.sssea.api import (
     BinaryAnnotationMetadata,
+    Features,
     Featurizer,
     Metadata,
     Record,
-    _featurize_abstract,
     read,
     stratify_featurize_binary,
     summarize,
@@ -70,6 +71,14 @@ def prepare(
     return PreparedData(x, y)
 
 
+def _featurize_abstract(reference: NamableReference, features: Features) -> str | None:
+    abstract = features.get("abstract")
+    if reference.name is None and abstract is None:
+        return None
+    text = " ".join(x for x in (reference.name, abstract) if x is not None)
+    return text
+
+
 @click.command()
 def _demo() -> None:
     import pystow
@@ -85,6 +94,7 @@ def _demo() -> None:
             BinaryAnnotationMetadata(key="PET polymerization"),
         ],
     )
+
     records = read("/Users/cthoyt/dev/catalaix/app/sources/citavi/papers.tsv", metadata=conf)
     click.echo(summarize(records, conf))
     embedder = pystow.get_sentence_transformer()

@@ -17,6 +17,7 @@ __all__ = [
     "BinaryAnnotationMetadata",
     "CategoricalAnnotation",
     "CategoricalAnnotationMetadata",
+    "Features",
     "Featurizer",
     "Metadata",
     "Record",
@@ -30,6 +31,7 @@ X = TypeVar("X")
 
 BinaryOrCategorical: TypeAlias = Literal["binary", "categorical"]
 
+#: A dictionary of features
 Features: TypeAlias = dict[str, Any]
 
 #: A function that consumes a features dictionary and produces a feature string
@@ -177,14 +179,6 @@ def _read_iter(path: Source, *, metadata: Metadata | None = None) -> Iterable[Re
                 continue
 
             yield Record(reference=reference, annotations=calls, features=features)
-
-
-def _featurize_abstract(reference: NamableReference, features: Features) -> str | None:
-    abstract = features.get("abstract")
-    if reference.name is None and abstract is None:
-        return None
-    text = " ".join(x for x in (reference.name, abstract) if x is not None)
-    return text
 
 
 def stratify_featurize_binary(
