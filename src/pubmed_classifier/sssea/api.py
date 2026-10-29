@@ -200,7 +200,7 @@ def _read_iter(path: Source, *, metadata: Metadata | None = None) -> Iterable[Re
                         )
 
             if not annotations:
-                logger.warning("[%d] no calls found", i)
+                logger.warning("[row %d] no calls found", i)
                 continue
 
             yield Record(reference=reference, annotations=annotations, features=features)
