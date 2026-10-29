@@ -1,10 +1,10 @@
-"""An implementation of SSSLP."""
+"""An implementation of SSSEA."""
 
 import datetime
 import logging
 from collections import Counter, defaultdict
 from collections.abc import Callable, Iterable, Sequence
-from typing import Any, Generic, Literal, TypeAlias, TypeVar
+from typing import Annotated, Any, Generic, Literal, TypeAlias, TypeVar
 
 from curies import NamableReference, Prefix
 from pydantic import BaseModel, Field
@@ -27,7 +27,7 @@ __all__ = [
 
 logger = logging.getLogger(__name__)
 
-X = TypeVar("X")
+AnnotationValueType = TypeVar("AnnotationValueType")
 
 BinaryOrCategorical: TypeAlias = Literal["binary", "categorical"]
 
@@ -41,7 +41,10 @@ Featurizer: TypeAlias = Callable[[NamableReference, Features], str | None]
 class _AnnotationMetadata(BaseModel):
     type: BinaryOrCategorical
     key: str
-    reference: NamableReference | None = None
+    predicate: Annotated[
+        NamableReference | None,
+        Field(default=None, description="the predicate connecting the entity to the annotation"),
+    ] = None
     nullable: bool = True
 
 
@@ -77,21 +80,21 @@ class Metadata(BaseModel):
     categories: list[AnnotationMetadata] = Field(default_factory=_default_category)
 
 
-class _BaseCall(BaseModel, Generic[X]):
+class _Annotation(BaseModel, Generic[AnnotationValueType]):
     type: BinaryOrCategorical
-    value: X
+    value: AnnotationValueType
     curator: NamableReference | None = None
     date: datetime.date | None = None
 
 
-class BinaryAnnotation(_BaseCall[bool]):
+class BinaryAnnotation(_Annotation[bool]):
     """A binary judgment."""
 
     type: Literal["binary"] = "binary"
     value: bool
 
 
-class CategoricalAnnotation(_BaseCall[str]):
+class CategoricalAnnotation(_Annotation[str]):
     """A categorical judgment."""
 
     type: Literal["categorical"] = "categorical"
@@ -131,6 +134,14 @@ def _read_iter(path: Source, *, metadata: Metadata | None = None) -> Iterable[Re
     if metadata is None:
         metadata = Metadata()
     with safe_open_dict_reader(path) as reader:
+        if missing_columns := sorted(
+            category.key
+            for category in metadata.categories
+            if not category.nullable
+            and (not reader.fieldnames or category.key not in reader.fieldnames)
+        ):
+            raise ValueError(f"missing columns for required annotations: {missing_columns}")
+
         # If name and title in reader columns, raise
         # TODO check that the reader's headers include the defined calls and features
         for i, record in enumerate(reader, start=2):
@@ -150,7 +161,7 @@ def _read_iter(path: Source, *, metadata: Metadata | None = None) -> Iterable[Re
             calls: dict[str, Annotation] = {}
             for category in metadata.categories:
                 value = record.get(category.key)
-                if value is None:
+                if not value:  # cath both explicit none and empty string
                     if category.nullable:
                         continue
                     else:
@@ -193,9 +204,6 @@ def stratify_featurize_binary(
     if category is None:
         category = DEFAULT_ANNOTATION_KEY
     for record in records:
-        if record.reference.name is None:
-            continue
-
         text = featurizer(record.reference, record.features)
         if text is None:
             continue

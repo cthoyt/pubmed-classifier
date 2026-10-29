@@ -3,17 +3,18 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
-from typing import Literal, overload
+from typing import TYPE_CHECKING, Literal, overload
 
 import numpy as np
 import pubmed_downloader
-from numpy.typing import NDArray
 from pubmed_downloader import Article
 from pubmed_downloader.client import PubMedSearchKwargs
-from pystow import get_sentence_transformer
-from sentence_transformers import SentenceTransformer
-from sklearn.linear_model import LogisticRegression
 from typing_extensions import Unpack
+
+if TYPE_CHECKING:
+    from numpy.typing import NDArray
+    from sentence_transformers import SentenceTransformer
+    from sklearn.linear_model import LogisticRegression
 
 from .api import _get_text, _predict
 
@@ -100,6 +101,8 @@ def predict(
 ) -> tuple[list[str], NDArray[np.float64]] | tuple[list[Article], NDArray[np.float64]]:
     """Classify documents from PubMed."""
     if embedder is None:
+        from pystow import get_sentence_transformer
+
         embedder = get_sentence_transformer()
 
     articles = list(pubmed_downloader.get_articles(pubmeds, error_strategy="skip"))

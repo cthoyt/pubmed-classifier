@@ -4,20 +4,18 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Iterable
-from typing import Any, NamedTuple, Self, TypeAlias, cast
+from typing import TYPE_CHECKING, Any, NamedTuple, Self, TypeAlias, cast
 
 import numpy as np
-import pubmed_downloader
 from numpy.typing import NDArray
-from pystow import get_sentence_transformer
 from sentence_transformers import SentenceTransformer
-from sklearn.calibration import CalibratedClassifierCV
-from sklearn.ensemble import RandomForestClassifier
 from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.linear_model import LogisticRegression
-from sklearn.metrics import roc_auc_score
-from sklearn.model_selection import train_test_split
-from sklearn.svm import SVC, LinearSVC
+
+if TYPE_CHECKING:
+    from pubmed_downloader import Article
+    from sklearn.ensemble import RandomForestClassifier
+    from sklearn.linear_model import LogisticRegression
+    from sklearn.svm import SVC, LinearSVC
 
 __all__ = [
     "Classifiers",
@@ -41,6 +39,11 @@ class Classifiers(NamedTuple):
     @classmethod
     def make(cls) -> Self:
         """Construct an ensemble of classifiers."""
+        from sklearn.calibration import CalibratedClassifierCV
+        from sklearn.ensemble import RandomForestClassifier
+        from sklearn.linear_model import LogisticRegression
+        from sklearn.svm import SVC, LinearSVC
+
         return cls(
             random_forest=RandomForestClassifier(),
             logistic_regression=LogisticRegression(),
@@ -56,6 +59,8 @@ def _prepare(
     embedder: SentenceTransformer | None = None,
 ) -> tuple[NDArray[np.float64], NDArray[np.bool]]:
     if embedder is None:
+        from pystow import get_sentence_transformer
+
         embedder = get_sentence_transformer()
 
     positive_embeddings, positive_labels = _embed_pubmed_ids(positive_pubmed_ids, embedder, True)
@@ -83,6 +88,9 @@ def train(
 def _train_helper(
     x: NDArray[np.float64], y: NDArray[np.bool], test_size: float = 0.33, random_state: int = 42
 ) -> tuple[Classifiers, Results]:
+    from sklearn.metrics import roc_auc_score
+    from sklearn.model_selection import train_test_split
+
     x_train, x_test, y_train, y_test = train_test_split(
         x, y, test_size=test_size, random_state=random_state, shuffle=True
     )
@@ -122,6 +130,8 @@ def _embed_pubmed_ids(
     embedder: SentenceTransformer | TfidfVectorizer,
     positive: bool,
 ) -> tuple[NDArray[np.float64], NDArray[np.bool]]:
+    import pubmed_downloader
+
     articles = pubmed_downloader.get_articles(pubmed_ids, error_strategy="skip")
     texts = [_get_text(article) for article in articles]
     return _embed(texts, embedder=embedder, positive=positive)
@@ -142,5 +152,5 @@ def _embedddd(
         raise TypeError(f"embedder type {type(embedder)} is not supported")
 
 
-def _get_text(article: pubmed_downloader.Article) -> str:
+def _get_text(article: Article) -> str:
     return article.title + " " + article.get_abstract()
