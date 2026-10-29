@@ -5,19 +5,11 @@ import logging
 from collections import Counter, defaultdict
 from collections.abc import Iterable, Sequence
 from pathlib import Path
-from typing import Literal
 
-import click
-import numpy as np
-import pystow
 from curies import NamableReference, Prefix
-from numpy.typing import NDArray
 from pydantic import BaseModel, Field
 from pystow.utils import safe_open_dict_reader
-from sentence_transformers import SentenceTransformer
 from tabulate import tabulate
-
-from pubmed_classifier.api import Classifiers, Results, _embed, _predict, _train_helper
 
 logger = logging.getLogger(__name__)
 
@@ -25,7 +17,6 @@ logger = logging.getLogger(__name__)
 class BinaryCategory(BaseModel):
     """Information about how a given category should be parsed."""
 
-    type: Literal["binary"] = "binary"
     key: str
     reference: NamableReference | None = None
 
@@ -43,10 +34,10 @@ class Conf(BaseModel):
     )
 
 
-class Call(BaseModel):
+class BinaryCall(BaseModel):
     """A true/false judgment for a given document."""
 
-    value: bool | None
+    value: bool
     curator: NamableReference | None = None
     date: datetime.date | None = None
 
@@ -55,7 +46,7 @@ class Record(BaseModel):
     """A single curation record."""
 
     document: NamableReference
-    calls: dict[str, Call]
+    calls: dict[str, BinaryCall]
     abstract: str | None = None
 
 
@@ -99,8 +90,10 @@ def _read_iter(path: str | Path, conf: Conf) -> Iterable[Record]:
                 # if extending to have categories that
                 # are non-binary, then this would change
                 value = _parse_bool(raw_value)
+                if value is None:
+                    continue
 
-                calls[category.key] = Call(
+                calls[category.key] = BinaryCall(
                     value=value,
                     curator=NamableReference.from_curie(curator_curie)
                     if (curator_curie := record.get("curator"))
@@ -143,40 +136,6 @@ def _stratify(
     return positive, negative
 
 
-def _prepare(
-    records: Iterable[Record],
-    *,
-    category: str | None = None,
-    embedder: SentenceTransformer | None = None,
-) -> tuple[NDArray[np.float64], NDArray[np.bool]]:
-    if embedder is None:
-        import pystow
-
-        embedder = pystow.get_sentence_transformer()
-
-    positives, negatives = _stratify(records, category=category)
-    if not positives or not negatives:
-        raise ValueError("missing one of positives/negatives. check that category is set properly")
-
-    positive_embeddings, positive_indicator = _embed(positives, embedder, True)
-    negative_embeddings, negative_indicator = _embed(negatives, embedder, False)
-
-    x = np.vstack((positive_embeddings, negative_embeddings))
-    y = np.hstack((positive_indicator, negative_indicator))
-    return x, y
-
-
-def train(
-    records: Iterable[Record],
-    *,
-    category: str | None = None,
-    embedder: SentenceTransformer | None = None,
-) -> tuple[Classifiers, Results]:
-    """Train a PubMed classifier based on positive and negative identifier sets."""
-    x, y = _prepare(records, category=category, embedder=embedder)
-    return _train_helper(x, y)
-
-
 def summarize(records: Iterable[Record], conf: Conf) -> str:
     """Summarize a PubMed classifier."""
     dd: defaultdict[str, Counter[bool | None]] = defaultdict(Counter)
@@ -193,40 +152,3 @@ def summarize(records: Iterable[Record], conf: Conf) -> str:
     ]
     t = tabulate(rows, headers=["Category", "Positive", "Negative", "Missing"], tablefmt="github")
     return t
-
-
-@click.command()
-def _demo() -> None:
-    conf = Conf(
-        title="test",
-        description="test",
-        categories=[
-            BinaryCategory(key="enzyme paper"),
-            BinaryCategory(key="PET depolymerization"),
-            BinaryCategory(key="PEF depolymerization"),
-            BinaryCategory(key="PEF polymerization"),
-            BinaryCategory(key="PET polymerization"),
-        ],
-    )
-    records = read("/Users/cthoyt/dev/catalaix/app/sources/citavi/papers.tsv", conf)
-    click.echo(summarize(records, conf))
-    embedder = pystow.get_sentence_transformer()
-    _classifiers, results = train(records, category="PEF depolymerization", embedder=embedder)
-    click.echo(
-        tabulate([(n, v) for n, _, v in results], headers=["model", "ROC-AUC"], tablefmt="github")
-    )
-
-    import pandas as pd
-
-    df = pd.read_csv(
-        "/Users/cthoyt/dev/catalaix/app/prioritization/collated.tsv", sep="\t", dtype=str
-    )
-
-    vecs = embedder.encode(df["title"], convert_to_numpy=True)
-    df["PEF depolymerization"] = _predict(_classifiers.logistic_regression, vecs)
-    df = df.sort_values("PEF depolymerization", ascending=False)
-    df.to_csv("pef-depolymerization.tsv", index=False, sep="\t")
-
-
-if __name__ == "__main__":
-    _demo()
