@@ -57,8 +57,7 @@ class TestSSSEA(unittest.TestCase):
         """)
         record = self._read_one(document)
         self.assertEqual("pubmed:30380085", record.reference.curie)
-        self.assertEqual(1, len(record.annotations))
-        self.assertIn(DEFAULT_ANNOTATION_KEY, record.annotations)
+        self.assertEqual({DEFAULT_ANNOTATION_KEY}, set(record.annotations))
         annotation = record.annotations[DEFAULT_ANNOTATION_KEY]
         self.assertIsInstance(annotation, BinaryAnnotation)
         self.assertTrue(annotation.value)
@@ -73,8 +72,7 @@ class TestSSSEA(unittest.TestCase):
         """)
         record = self._read_one(document, metadata=metadata)
         self.assertEqual("pubmed:30380085", record.reference.curie)
-        self.assertEqual(1, len(record.annotations))
-        self.assertIn(key, record.annotations)
+        self.assertEqual({key}, set(record.annotations))
         annotation = record.annotations[key]
         self.assertIsInstance(annotation, BinaryAnnotation)
         self.assertTrue(annotation.value)
@@ -90,8 +88,7 @@ class TestSSSEA(unittest.TestCase):
         """)
         record = self._read_one(document, metadata=metadata)
         self.assertEqual("pubmed:30380085", record.reference.curie)
-        self.assertEqual(1, len(record.annotations))
-        self.assertIn(DEFAULT_ANNOTATION_KEY, record.annotations)
+        self.assertEqual({DEFAULT_ANNOTATION_KEY}, set(record.annotations))
         annotation = record.annotations[DEFAULT_ANNOTATION_KEY]
         self.assertIsInstance(annotation, CategoricalAnnotation)
         self.assertEqual("a", annotation.value)
@@ -105,19 +102,17 @@ class TestSSSEA(unittest.TestCase):
             ]
         )
         document = dedent("""\
-            entity	binary_call categorical_call	curator	date
-            pubmed:30380085	true    a	orcid:0009-0009-3402-8013	2025-10-07
+            entity	binary_call	categorical_call	curator	date
+            pubmed:30380085	true	a	orcid:0009-0009-3402-8013	2025-10-07
         """)
         record = self._read_one(document, metadata=metadata)
         self.assertEqual("pubmed:30380085", record.reference.curie)
-        self.assertEqual(2, len(record.annotations))
+        self.assertEqual({"binary_call", "categorical_call"}, set(record.annotations))
 
-        self.assertIn("binary_call", record.annotations)
         binary_annotation = record.annotations["binary_call"]
         self.assertIsInstance(binary_annotation, BinaryAnnotation)
         self.assertTrue(binary_annotation.value)
 
-        self.assertIn("categorical_call", record.annotations)
         categorical_annotation = record.annotations["categorical_call"]
         self.assertIsInstance(categorical_annotation, CategoricalAnnotation)
         self.assertEqual("a", categorical_annotation.value)

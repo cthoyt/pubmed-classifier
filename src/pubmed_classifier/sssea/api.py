@@ -29,7 +29,7 @@ logger = logging.getLogger(__name__)
 
 AnnotationValueType = TypeVar("AnnotationValueType")
 
-BinaryOrCategorical: TypeAlias = Literal["binary", "categorical"]
+AnnotationType: TypeAlias = Literal["binary", "categorical"]
 
 #: A dictionary of features
 Features: TypeAlias = dict[str, Any]
@@ -39,7 +39,7 @@ Featurizer: TypeAlias = Callable[[NamableReference, Features], str | None]
 
 
 class _AnnotationMetadata(BaseModel):
-    type: BinaryOrCategorical
+    annotation_type: AnnotationType
     key: str
     predicate: Annotated[
         NamableReference | None,
@@ -51,17 +51,19 @@ class _AnnotationMetadata(BaseModel):
 class BinaryAnnotationMetadata(_AnnotationMetadata):
     """Information about how a given category should be parsed."""
 
-    type: Literal["binary"] = "binary"
+    annotation_type: Literal["binary"] = "binary"
 
 
 class CategoricalAnnotationMetadata(_AnnotationMetadata):
     """Information about how a given category should be parsed."""
 
-    type: Literal["categorical"] = "categorical"
+    annotation_type: Literal["categorical"] = "categorical"
     allowed: list[str] | None = None
 
 
-AnnotationMetadata = BinaryAnnotationMetadata | CategoricalAnnotationMetadata
+AnnotationMetadata = Annotated[
+    BinaryAnnotationMetadata | CategoricalAnnotationMetadata, Field(discriminator="annotation_type")
+]
 
 DEFAULT_ANNOTATION_KEY = "call"
 
@@ -81,7 +83,7 @@ class Metadata(BaseModel):
 
 
 class _Annotation(BaseModel, Generic[AnnotationValueType]):
-    type: BinaryOrCategorical
+    annotation_type: AnnotationType
     value: AnnotationValueType
     curator: NamableReference | None = None
     date: datetime.date | None = None
@@ -90,19 +92,21 @@ class _Annotation(BaseModel, Generic[AnnotationValueType]):
 class BinaryAnnotation(_Annotation[bool]):
     """A binary judgment."""
 
-    type: Literal["binary"] = "binary"
+    annotation_type: Literal["binary"] = "binary"
     value: bool
 
 
 class CategoricalAnnotation(_Annotation[str]):
     """A categorical judgment."""
 
-    type: Literal["categorical"] = "categorical"
+    annotation_type: Literal["categorical"] = "categorical"
     value: str
 
 
 #: An annotation, either binary or categorical
-Annotation = BinaryAnnotation | CategoricalAnnotation
+Annotation = Annotated[
+    BinaryAnnotation | CategoricalAnnotation, Field(discriminator="annotation_type")
+]
 
 
 class Record(BaseModel):
@@ -133,6 +137,13 @@ PUBMED = Prefix("pubmed")
 def _read_iter(path: Source, *, metadata: Metadata | None = None) -> Iterable[Record]:  # noqa:C901
     if metadata is None:
         metadata = Metadata()
+
+    # check that metadata doesn't have duplicate keys
+    counter = Counter(category.key for category in metadata.categories)
+    duplicates = Counter({k: count for k, count in counter.items() if count > 1})
+    if duplicates:
+        raise ValueError(f"duplicate categories defined in metadata: {duplicates}")
+
     with safe_open_dict_reader(path) as reader:
         if missing_columns := sorted(
             category.key
@@ -140,7 +151,10 @@ def _read_iter(path: Source, *, metadata: Metadata | None = None) -> Iterable[Re
             if not category.nullable
             and (not reader.fieldnames or category.key not in reader.fieldnames)
         ):
-            raise ValueError(f"missing columns for required annotations: {missing_columns}")
+            raise ValueError(
+                f"missing columns for required annotations: {missing_columns}, "
+                f"got {reader.fieldnames}"
+            )
 
         # If name and title in reader columns, raise
         # TODO check that the reader's headers include the defined calls and features
@@ -158,7 +172,7 @@ def _read_iter(path: Source, *, metadata: Metadata | None = None) -> Iterable[Re
 
             features: dict[str, Any] = {}
 
-            calls: dict[str, Annotation] = {}
+            annotations: dict[str, Annotation] = {}
             for category in metadata.categories:
                 value = record.get(category.key)
                 if not value:  # cath both explicit none and empty string
@@ -175,21 +189,21 @@ def _read_iter(path: Source, *, metadata: Metadata | None = None) -> Iterable[Re
 
                 match category:
                     case BinaryAnnotationMetadata():
-                        calls[category.key] = BinaryAnnotation(
+                        annotations[category.key] = BinaryAnnotation(
                             value=_parse_bool(value), curator=curator, date=record.get("date")
                         )
-                    case CategoricalAnnotation():
+                    case CategoricalAnnotationMetadata():
                         if category.allowed and value not in category.allowed:
                             raise ValueError
-                        calls[category.key] = CategoricalAnnotation(
+                        annotations[category.key] = CategoricalAnnotation(
                             value=value, curator=curator, date=record.get("date")
                         )
 
-            if not calls:
+            if not annotations:
                 logger.warning("[%d] no calls found", i)
                 continue
 
-            yield Record(reference=reference, annotations=calls, features=features)
+            yield Record(reference=reference, annotations=annotations, features=features)
 
 
 def stratify_featurize_binary(
