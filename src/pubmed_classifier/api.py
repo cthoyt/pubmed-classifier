@@ -17,7 +17,7 @@ from sssea.learn import (
     BinaryClassifierResult,
     BinaryClassifiers,
     Embedder,
-    embed_text,
+    _embed_text_helper,
     featurize_article,
     predict_binary,
     train_binary,
@@ -164,7 +164,7 @@ def predict(
         texts.append(_get_text(article))
         pubmeds_rv.append(str(article.pubmed))
 
-    embeddings = embed_text(embedder, texts, show_progress_bar=progress)
+    embeddings = _embed_text_helper(embedder, texts, show_progress_bar=progress)
     results = predict_binary(classifier, embeddings)
     if full:
         return articles, results
