@@ -3,7 +3,7 @@ requires = ["uv_build>=0.9.6,<1.0"]
 build-backend = "uv_build"
 
 [project]
-name = "pubmed_classifier"
+name = "pubmed-classifier"
 version = "0.0.2-dev"
 description = "Classify documents in PubMed"
 readme = "README.md"
@@ -41,7 +41,7 @@ keywords = [
 
 # License Information.
 # See PEP-639 at https://peps.python.org/pep-0639/#add-license-files-key
-licene = "MIT"
+license = "MIT"
 license-files = [
     "LICENSE",
 ]
@@ -67,14 +67,10 @@ tests = [
     "coverage[toml]",
 ]
 docs = [
-    "sphinx>=8,<9",
-    "sphinx-rtd-theme>=3.0","sphinx-click", 
-    "sphinx_automodapi",
-    # Include if your project uses Pydantic:
-    # "autodoc_pydantic",
-    # To include LaTeX comments easily in your docs.
-    # If you uncomment this, don't forget to do the same in docs/conf.py
-    # texext
+    "sphinx>=8",
+    "sphinx-rtd-theme>=3.0",
+    "sphinx-click",
+    "sphinx-automodapi",
 ]
 lint = [
     "ruff",
@@ -116,7 +112,7 @@ Documentation = "https://pubmed_classifier.readthedocs.io"
 Funding = "https://github.com/sponsors/cthoyt"
 
 [project.scripts]
-pubmed_classifier = "pubmed_classifier.cli:main"
+pubmed-classifier = "pubmed_classifier.cli:main"
 
 [tool.cruft]
 skip = [
