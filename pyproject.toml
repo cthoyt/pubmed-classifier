@@ -52,10 +52,11 @@ dependencies = [
     "scikit-learn",
     "pubmed-downloader>=0.0.13",
     "typing-extensions",
-    "sentence_transformers",
+    "sentence-transformers",
     "pystow>=0.10.3",
     "click",
     "tabulate",
+    "sssea>=0.0.2",
 ]
 
 # see https://peps.python.org/pep-0735/ and https://docs.astral.sh/uv/concepts/dependencies/#dependency-groups
@@ -81,7 +82,6 @@ typing = [
     { include-group = "tests" },
     "mypy",
     "pydantic",
-    "types-click",
     "types-tabulate",
 ]
 docs-lint = [

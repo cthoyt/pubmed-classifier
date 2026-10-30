@@ -9,14 +9,14 @@ import numpy as np
 import pubmed_downloader
 from pubmed_downloader import Article
 from pubmed_downloader.client import PubMedSearchKwargs
+from sssea.learn import Embedder
 from typing_extensions import Unpack
 
 if TYPE_CHECKING:
     from numpy.typing import NDArray
-    from sentence_transformers import SentenceTransformer
     from sklearn.linear_model import LogisticRegression
 
-from .api import _get_text, _predict
+from sssea.learn import predict_binary
 
 __all__ = ["predict", "predict_query"]
 
@@ -26,7 +26,7 @@ __all__ = ["predict", "predict_query"]
 def predict_query(
     query: str,
     *,
-    embedder: SentenceTransformer | None = ...,
+    embedder: Embedder | None = ...,
     classifier: LogisticRegression,
     progress: bool = ...,
     full: Literal[False] = False,
@@ -39,7 +39,7 @@ def predict_query(
 def predict_query(
     query: str,
     *,
-    embedder: SentenceTransformer | None = ...,
+    embedder: Embedder | None = ...,
     classifier: LogisticRegression,
     progress: bool = ...,
     full: Literal[True] = True,
@@ -50,7 +50,7 @@ def predict_query(
 def predict_query(
     query: str,
     *,
-    embedder: SentenceTransformer | None = None,
+    embedder: Embedder | None = None,
     classifier: LogisticRegression,
     progress: bool = True,
     full: bool = False,
@@ -72,7 +72,7 @@ def predict_query(
 def predict(
     pubmeds: Sequence[str],
     *,
-    embedder: SentenceTransformer | None,
+    embedder: Embedder | None,
     classifier: LogisticRegression,
     progress: bool,
     full: Literal[False],
@@ -84,7 +84,7 @@ def predict(
 def predict(
     pubmeds: Sequence[str],
     *,
-    embedder: SentenceTransformer | None,
+    embedder: Embedder | None,
     classifier: LogisticRegression,
     progress: bool,
     full: Literal[True],
@@ -94,7 +94,7 @@ def predict(
 def predict(
     pubmeds: Sequence[str],
     *,
-    embedder: SentenceTransformer | None = None,
+    embedder: Embedder | None = None,
     classifier: LogisticRegression,
     progress: bool = True,
     full: bool = False,
@@ -111,8 +111,12 @@ def predict(
         texts.append(_get_text(article))
         pubmeds_rv.append(str(article.pubmed))
     embeddings = embedder.encode(texts, convert_to_numpy=True, show_progress_bar=progress)
-    results = _predict(classifier, embeddings)
+    results = predict_binary(classifier, embeddings)
     if full:
         return articles, results
     else:
         return pubmeds_rv, results
+
+
+def _get_text(article: Article) -> str:
+    return article.title + " " + article.get_abstract()
