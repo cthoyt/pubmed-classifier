@@ -1,9 +1,0 @@
-# title: hello
-# description: a description
-# categories:
-#   call:
-#      type: binary
-#      tags: [ new, old, something ]
-#   call2
-document	call	call2	curator	date	category
-pubmed:30380085	true	true	orcid:0009-0009-3402-8013	2025-10-07	new_prefix
