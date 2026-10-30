@@ -57,6 +57,7 @@ dependencies = [
     "click",
     "tabulate",
     "sssea>=0.0.2",
+    "curies",
 ]
 
 # see https://peps.python.org/pep-0735/ and https://docs.astral.sh/uv/concepts/dependencies/#dependency-groups

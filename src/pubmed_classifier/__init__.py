@@ -1,7 +1,6 @@
 """Classify documents in PubMed."""
 
-from .api import train
-from .predict import predict, predict_query
+from .api import predict, predict_query, train
 
 __all__ = [
     "predict",
