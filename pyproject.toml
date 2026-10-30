@@ -32,7 +32,6 @@ classifiers = [
     "Programming Language :: Python :: 3.14",
     "Programming Language :: Python :: 3 :: Only",
     "Typing :: Typed",
-    # TODO add your topics from the Trove controlled vocabulary (see https://pypi.org/classifiers)
 ]
 keywords = [
     "snekpack", # please keep this keyword to credit the cookiecutter-snekpack template
@@ -53,10 +52,12 @@ dependencies = [
     "scikit-learn",
     "pubmed-downloader>=0.0.13",
     "typing-extensions",
-    "sentence_transformers",
-    "pystow>=0.9.0",
+    "sentence-transformers",
+    "pystow>=0.10.3",
     "click",
     "tabulate",
+    "sssea>=0.0.2",
+    "curies",
 ]
 
 # see https://peps.python.org/pep-0735/ and https://docs.astral.sh/uv/concepts/dependencies/#dependency-groups
@@ -78,7 +79,6 @@ typing = [
     { include-group = "tests" },
     "mypy",
     "pydantic",
-    "types-click",
     "types-tabulate",
 ]
 docs-lint = [
@@ -100,7 +100,7 @@ pyroma = [
 
 # see https://packaging.python.org/en/latest/guides/writing-pyproject-toml/#dependencies-optional-dependencies
 [project.optional-dependencies]
-
+demo = ["bioregistry", "pandas"]
 
 # See https://packaging.python.org/en/latest/guides/writing-pyproject-toml/#urls
 # and also https://packaging.python.org/en/latest/specifications/well-known-project-urls/
